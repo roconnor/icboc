@@ -148,7 +148,7 @@ impl super::Command for ImportIcboc {
                         .with_context(|| format!("decoding notes from entry {}", i))?
                 };
                 wallet
-                    .add_address(desc_idx, Some(i as u32), time, notes)
+                    .add_address(desc_idx, Some(i as u32), time, notes, dongle, false)
                     .with_context(|| format!("importing address for entry {}", i))?;
             }
 

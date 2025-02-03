@@ -110,6 +110,7 @@ pub trait Dongle {
         &mut self,
         key: &miniscript::DefiniteDescriptorKey,
         key_cache: &mut KeyCache,
+        display: bool,
     ) -> Result<secp256k1::PublicKey, Error> {
         // FIXME once https://github.com/rust-bitcoin/rust-miniscript/pull/492 is in we can just convert
         // the reference without cloning. with as_descriptor_public_key.
@@ -120,10 +121,11 @@ pub trait Dongle {
                 miniscript::descriptor::SinglePubKey::XOnly(_) => Err(Error::NoTaprootSupport),
             },
             miniscript::DescriptorPublicKey::XPub(ref xkey) => {
-                if let Some(entry) = key_cache.lookup(xkey.xkey, &xkey.derivation_path) {
-                    return Ok(entry);
+                if !display {
+                    if let Some(entry) = key_cache.lookup(xkey.xkey, &xkey.derivation_path) {
+                        return Ok(entry);
+                    }
                 }
-
                 let fingerprint = key.master_fingerprint();
                 let key_full_path = key.full_derivation_path().expect("no multipath keys");
                 assert!(key_full_path.len() < 11); // limitation of the Nano S
@@ -153,7 +155,7 @@ pub trait Dongle {
                     }
                 }
                 // The fingerprint/origin match the dongle. Look up the key and cache it.
-                let dongle_xpub = self.get_public_key(&key_full_path, false)?;
+                let dongle_xpub = self.get_public_key(&key_full_path, display)?;
                 key_cache.insert(
                     xkey.xkey,
                     xkey.derivation_path.clone(),

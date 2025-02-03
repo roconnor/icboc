@@ -61,7 +61,7 @@ impl super::Command for GetNewAddress {
 
         // FIXME should notice/warn when overwriting an existing address
         let addr = wallet
-            .add_address(options.descriptor, options.index, timestr, options.note)
+            .add_address(options.descriptor, options.index, timestr, options.note, dongle, true)
             .context("adding address")?;
 
         println!("{}", addr);

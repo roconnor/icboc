@@ -35,7 +35,6 @@ mod util;
 mod wallet;
 
 use miniscript::bitcoin::{bip32, secp256k1};
-use miniscript::DescriptorPublicKey;
 use std::collections::HashMap;
 
 pub use dongle::ledger;
@@ -63,21 +62,6 @@ impl KeyCache {
     /// Construct a new empty key cache
     fn new() -> Self {
         Self::default()
-    }
-
-    /// Looks up a descriptor public key in the cache.
-    fn lookup_descriptor_pubkey(
-        &self,
-        d: &miniscript::DefiniteDescriptorKey,
-    ) -> Option<secp256k1::PublicKey> {
-        match *d.as_descriptor_public_key() {
-            DescriptorPublicKey::Single(ref single) => match single.key {
-                miniscript::descriptor::SinglePubKey::FullKey(key) => Some(key.inner),
-                miniscript::descriptor::SinglePubKey::XOnly(_) => todo!("No taproot support yet"),
-            },
-            DescriptorPublicKey::XPub(ref xpub) => self.lookup(xpub.xkey, &xpub.derivation_path),
-            DescriptorPublicKey::MultiXPub(..) => panic!("multi-xpubs (BIP 389) not supported"),
-        }
     }
 
     /// Looks up a key in the map

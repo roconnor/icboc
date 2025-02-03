@@ -32,7 +32,6 @@ use std::collections::{HashMap, HashSet};
 use std::{
     cmp,
     collections::hash_map::Entry,
-    convert::Infallible,
     fmt,
     io::{Read, Seek, Write},
     sync::{Arc, Mutex},
@@ -260,8 +259,9 @@ impl Wallet {
         dongle: &mut D,
         key_cache: &mut KeyCache,
         key: &miniscript::DefiniteDescriptorKey,
+        display: bool,
     ) -> Result<secp256k1::PublicKey, Error> {
-        dongle.get_wallet_public_key(key, key_cache)
+        dongle.get_wallet_public_key(key, key_cache, display)
     }
 
     /// Helper fuction that (tries to) cache all the keys in a descriptor from the Ledger
@@ -275,6 +275,7 @@ impl Wallet {
             dongle,
             key_cache: &mut self.key_cache,
             index,
+            display: false,
         };
         desc.translate_pk(&mut translator)
             .map_err(|e| e.expect_translator_err("caching won't cause duplicate keys"))
@@ -333,12 +334,14 @@ impl Wallet {
     }
 
     /// Adds a new address to the wallet.
-    pub fn add_address(
+    pub fn add_address<D: Dongle>(
         &mut self,
         descriptor_idx: usize,
         wildcard_idx: Option<u32>,
         time: String,
         notes: String,
+        dongle: &mut D,
+        display: bool,
     ) -> Result<Arc<Address>, Error> {
         let wildcard_idx = {
             let mut next_idx = self.descriptors[descriptor_idx].next_idx.lock().unwrap();
@@ -347,9 +350,11 @@ impl Wallet {
             wildcard_idx
         };
 
-        let mut translator = CachedKeyTranslator {
-            key_cache: &self.key_cache,
+        let mut translator = KeyCachingTranslator {
+            dongle,
+            key_cache: &mut self.key_cache,
             index: wildcard_idx,
+            display,
         };
         // Unwrap safe since the error type here is `Infallible`
         let inst = self.descriptors[descriptor_idx]
@@ -524,6 +529,7 @@ pub struct KeyCachingTranslator<'dongle, 'keycache, D: Dongle> {
     pub dongle: &'dongle mut D,
     pub key_cache: &'keycache mut KeyCache,
     pub index: u32,
+    pub display: bool,
 }
 
 impl<D: Dongle> miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Error>
@@ -534,32 +540,7 @@ impl<D: Dongle> miniscript::Translator<miniscript::DescriptorPublicKey, CachedKe
     fn pk(&mut self, pk: &miniscript::DescriptorPublicKey) -> Result<CachedKey, Error> {
         let derived = pk.clone().at_derivation_index(self.index).unwrap();
         Ok(CachedKey {
-            key: Wallet::cache_key(self.dongle, self.key_cache, &derived)?,
-            desc_key: derived,
-        })
-    }
-}
-
-/// A `Translator` for use with `miniscript::TranslatePk::translate_pk` which converts
-/// a `DescriptorPublicKey` to a `CachedKey` by looking it up in a given cache.
-///
-/// The translation will panic if the key is not actually in the cache. However,
-/// this translation is only called when given an `Address`, which is impossible
-/// to construct without first having cached the key.
-pub struct CachedKeyTranslator<'keycache> {
-    pub key_cache: &'keycache KeyCache,
-    pub index: u32,
-}
-
-impl miniscript::Translator<miniscript::DescriptorPublicKey, CachedKey, Infallible>
-    for CachedKeyTranslator<'_>
-{
-    miniscript::translate_hash_clone!(miniscript::DescriptorPublicKey, CachedKey, Infallible);
-
-    fn pk(&mut self, pk: &miniscript::DescriptorPublicKey) -> Result<CachedKey, Infallible> {
-        let derived = pk.clone().at_derivation_index(self.index).unwrap();
-        Ok(CachedKey {
-            key: self.key_cache.lookup_descriptor_pubkey(&derived).unwrap(),
+            key: Wallet::cache_key(self.dongle, self.key_cache, &derived, self.display)?,
             desc_key: derived,
         })
     }
